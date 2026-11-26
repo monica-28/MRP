@@ -1,0 +1,3 @@
+SELECT production_orders.xproduction_order_id, xassembly_item_id, xactual_consumed_quantity - ((CAST(xreleased_quantity - xcompleted_quantity AS REAL) / NULLIF(xreleased_quantity, 0)) * (1 - xrequired_quantity)) AS unused_qty, CAST(xreleased_quantity - xcompleted_quantity AS REAL) / NULLIF(xreleased_quantity, 0) AS pending_pct, xactual_consumed_quantity, xrequired_quantity, 
+((CAST(xreleased_quantity - xcompleted_quantity AS REAL) / NULLIF(xreleased_quantity, 0)) * xrequired_quantity) AS pd_qty
+FROM production_orders JOIN production_order_components

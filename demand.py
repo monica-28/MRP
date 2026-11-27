@@ -1,10 +1,11 @@
+from datetime import date
 import sqlite3
 from contextlib import closing
 
 from config import DATABASE_PATH
 
 
-def read_demand() -> tuple[dict[tuple[str, ...], float], dict[tuple[str, ...], float], dict[tuple[str, ...], float]]:
+def read_demand() -> tuple[dict[tuple[str, date], float], dict[tuple[str, date], float], dict[tuple[str, date], float]]:
 
     deliveries = {}
     ordered_items = {}
@@ -17,26 +18,29 @@ def read_demand() -> tuple[dict[tuple[str, ...], float], dict[tuple[str, ...], f
             cursor.execute('SELECT * FROM v_weekly_delivery_notes')
             results = cursor.fetchall()
             for row in results:
-                key = (row["xitem_id"], row["week_start"])
+                week_start = date.fromisoformat(row["week_start"])
+                key = (row["xitem_id"], week_start)
                 deliveries[key] = float(row["delivered_qty"])
 
         with closing(conn.cursor()) as cursor:
             cursor.execute('SELECT * FROM v_weekly_orders')
             results = cursor.fetchall()
             for row in results:
-                key = (row["xitem_id"], row["week_start"])
+                week_start = date.fromisoformat(row["week_start"])
+                key = (row["xitem_id"], week_start)
                 ordered_items[key] = float(row["pending_qty"])
 
         with closing(conn.cursor()) as cursor:
             cursor.execute('SELECT * FROM v_weekly_forecast')
             results = cursor.fetchall()
             for row in results:
-                key = (row["xitem_id"], row["week_start"])
+                week_start = date.fromisoformat(row["week_start"])
+                key = (row["xitem_id"], week_start)
                 forecasted_items[key] = float(row["forecast_qty"])
 
     return deliveries, ordered_items, forecasted_items
 
-def get_real_needs(deliveries: dict[tuple[str, ...], float], ordered_items: dict[tuple[str, ...], float], forecasted_items: dict[tuple[str, ...], float]) -> dict[tuple[str, ...], float]:
+def get_real_needs(deliveries: dict[tuple[str, date], float], ordered_items: dict[tuple[str, date], float], forecasted_items: dict[tuple[str, date], float]) -> dict[str, list[tuple[date, float]]]:
     """
     Calcula las necesidades reales de los artículos en función de las entregas, pedidos y pronósticos.
 
@@ -64,7 +68,9 @@ def get_real_needs(deliveries: dict[tuple[str, ...], float], ordered_items: dict
         else:
             real_need = ordered_qty
         if real_need > 0:
-            real_needs[key] = real_need
+            if item not in real_needs:
+                real_needs[item] = []
+            real_needs[item].append((week, real_need))
 
     return real_needs
 
@@ -86,9 +92,14 @@ if __name__ == "__main__":
         delivered_qty = deliveries.get(key, 0)
         pending_qty = ordered_items.get(key, 0)
         forecast_qty = forecasted_items.get(key, 0)
-        need_qty = real_needs.get(key, 0)
+        need_qty = 0.0
+
+        for need_week, quantity in real_needs.get(item, []):
+            if need_week == week_start:
+                need_qty = quantity
+                break
 
         print(
-            f"{item:<15} {week_start:<12} {delivered_qty:>12.2f} "
+            f"{item:<15} {week_start.strftime('%Y-%m-%d'):<12} {delivered_qty:>12.2f} "
             f"{pending_qty:>12.2f} {forecast_qty:>12.2f} {need_qty:>12.2f}"
         )
